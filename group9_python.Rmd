@@ -1,0 +1,227 @@
+---
+title: "STAT 506 group project: Group 9 Cubic Spline Regression"
+author: "Meng-Ni Ho"
+date: "11/21/2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(reticulate)
+use_python("/Users/mandy/anaconda3/bin/python")
+```
+
+1. Loading packages
+```{python}
+import numpy as np
+import pandas as pd
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+import matplotlib.pyplot as plt
+from math import sqrt
+from sklearn.metrics import mean_squared_error
+from patsy import dmatrix
+from scipy import interpolate
+```
+
+2. Import dataset
+```{python}
+# read dataset
+data = pd.read_csv("uswages.csv")
+print(data.head())
+```
+
+3. Data exploration
+```{python}
+print(data.describe())
+```
+
+```{python}
+print(data.info())
+```
+
+```{python}
+## exper vs wage ##
+data_x = data[['exper']]
+data_y = data[['wage']]
+
+#visualize the relationship between experience and wage
+plt.scatter(data_x, data_y, facecolor = 'None', edgecolor = 'k', alpha = 0.3)
+plt.suptitle('Fig 1. Relationship between experience and wage', fontsize=12)
+plt.xlabel('experience')
+plt.ylabel('wage')
+plt.show()
+```
+
+```{python}
+# remove outlier
+data_ylim = data.loc[data['wage']<= 7000]
+wage = data_ylim[['wage']]
+exper_x = data_ylim[['exper']]
+
+#visualize the relationship between experience and wage
+plt.clf()
+plt.scatter(exper_x, wage, facecolor = 'None', edgecolor = 'k', alpha = 0.3)
+plt.suptitle('Fig 2. Relationship between experience and wage (remove outlier)', fontsize=12)
+plt.xlabel('experience')
+plt.ylabel('wage')
+plt.show()
+```
+
+
+4. Simple Linear Regression
+```{python}
+#add an intercept (beta_0) to our model
+exper_x = sm.add_constant(exper_x)  
+
+# model fitting
+model = sm.OLS(wage, exper_x).fit()
+
+# find fitted value
+predictions1 = model.predict(exper_x) 
+
+print(model.summary())
+```
+
+```{python}
+# data visualization
+plt.clf()
+plt.scatter(exper_x['exper'], wage, facecolor = 'None', edgecolor = 'k', alpha = 0.3)
+plt.plot(exper_x['exper'], predictions1, color = 'green', linewidth = 1.5)
+plt.suptitle('Fig 3. Relationship between experience and wage: using simple linear regression', fontsize=12)
+plt.xlabel('experience')
+plt.ylabel('wage')
+plt.show()
+```
+
+
+```{python}
+# Calculating RMSE value
+rms1 = sqrt(mean_squared_error(wage, predictions1))
+print(rms1)
+```
+
+
+
+4. Polynomial Regression
+```{python}
+# refit model using polynomial regression ("exper" with degree = 2)
+exper_x['exper2'] = np.power(exper_x['exper'], 2)
+
+# model fitting
+model2 = sm.OLS(wage, exper_x).fit()
+
+# find fitted value
+predictions2 = model2.predict(exper_x) 
+
+print(model2.summary())
+```
+
+```{python}
+# reduce samples down to 100
+x_lim = np.linspace(start = exper_x['exper'].min(), stop = exper_x['exper'].max(), num = 100)
+x_lim_df = pd.DataFrame({'exper':x_lim})
+x_lim_df['exper2'] = np.power(x_lim_df['exper'], 2)
+x_lim_df = sm.add_constant(x_lim_df) 
+
+# find fitted value using x_lim
+fit_reduce = model2.predict(x_lim_df)
+
+# data visualization
+plt.clf()
+plt.scatter(exper_x['exper'], wage, facecolor = 'None', edgecolor = 'k', alpha = 0.3)
+plt.plot(x_lim_df[['exper']], fit_reduce, color = 'blue', linewidth = 1.5, label='experience with degree = 2')
+plt.legend()
+plt.suptitle('Fig 4. Relationship between experience and wage: using polynomial regression', fontsize=12)
+plt.xlabel('experience')
+plt.ylabel('wage')
+plt.show()
+
+```
+
+
+```{python}
+# Calculating RMSE value
+rms2 = sqrt(mean_squared_error(wage, predictions2))
+print(rms2)
+```
+
+
+
+5. Cubic Regression
+```{python}
+# cubic spline with 4 knots at 5, 15, 25, 40
+cubic_x = dmatrix("bs(data, knots = (0, 20, 40, 57), include_intercept = False)", {"data": exper_x[['exper']]}, return_type = 'dataframe')
+
+# model fitting
+model3 = sm.GLM(wage, cubic_x).fit()
+
+# find fitted value
+predictions3 = model3.predict(cubic_x)
+
+print(model3.summary())
+
+# reduce samples down to 100
+x_lim = np.linspace(exper_x[['exper']].min(), exper_x[['exper']].max(), 100)
+
+# find fitted value using x_lim
+fit_reduce2 = model3.predict(dmatrix("bs(train, knots = (0, 20, 40, 57), include_intercept = False)", {"train": x_lim}, return_type = 'dataframe'))
+
+```
+
+```{python}
+# plot spline
+plt.clf()
+plt.scatter(exper_x[['exper']], wage, facecolor='None', edgecolor='k', alpha=0.1)
+plt.plot(x_lim, fit_reduce2, color='r', label='Specifying 4 knots, knots = (0, 20, 40, 57)')
+plt.legend()
+plt.suptitle('Fig 5. Relationship between experience and wage: using cubic regression', fontsize=12)
+plt.ylim(0, 5000)
+plt.xlabel('experience')
+plt.ylabel('wage')
+plt.show()
+```
+
+
+```{python}
+# Calculating RMSE value
+rms3 = sqrt(mean_squared_error(wage, predictions3))
+print(rms3)
+```
+
+6. Summary
+By looking at Fig 6, we can see that polynomial curve and spline curve do overlap with eachother, and their residual MSE both look similar with spline's MSE seems to be slightly smaller.
+```{python}
+# overlay three regression curve
+plt.clf()
+plt.scatter(exper_x[['exper']], wage, facecolor='None', edgecolor='k', alpha=0.1)
+plt.plot(exper_x['exper'], predictions1, color = 'green', linewidth = 1.5, label = 'Simple Linear Regression')
+plt.plot(x_lim_df['exper'], fit_reduce, color = 'blue', linewidth = 1.5, label='Polynomial Regression, experience degree = 2')
+plt.plot(x_lim, fit_reduce2, color='r', linewidth = 1.5, label='Cubic Regrssion, knots = (0, 20, 40, 57)')
+plt.legend()
+plt.suptitle('Fig 6. Relationship between experience and wage', fontsize=12)
+plt.ylim(0, 5000)
+plt.xlabel('experience')
+plt.ylabel('wage')
+plt.show()
+```
+
+```{python}
+# compare mse
+model = ['SLR', 'Polynomial', 'Spline']
+RMSE = [rms1, rms2, rms3]
+compare = pd.DataFrame({'Model':model, 'RMSE':RMSE})
+print(compare)
+```
+
+
+
+
+
+
+
+
+
+
