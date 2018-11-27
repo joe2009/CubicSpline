@@ -1,0 +1,126 @@
+---
+title: "Stats 506 Group 9: Cubic Spline Regression"
+author: "Joe Laslie, jlaslie@umich.edu"
+date: "`r format.Date(Sys.Date(), '%B %d, %Y')`"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+
+```{r, echo=FALSE, message=FALSE}
+require(knitr)
+statapath <- "C:/Program Files (x86)/Stata15/Stata-64.exe"
+opts_chunk$set(engine="stata", engine.path=statapath, comment="")
+```
+
+
+## 1. Loading Packages
+```{stata, results = "hide"}
+
+ssc install bspline
+
+ssc install markstat
+ssc install whereis
+
+```
+
+## 2. Import Dataset
+
+We start by loading the data and presenting the first 4 observations.
+
+```{stata}
+import delimited uswages.csv
+list in 1/4
+```
+
+## 3. Data Exploration
+
+This dataset is exploring how wages in the U.S. are affected by certain variables. For simplicity, we will be regressing the variable "exper" onto "wage" and looking at the resulting relationship. First we will visualize how these 2 variables are related. We will also remove outliers where wage is greater than 4000.
+
+```{stata}
+import delimited uswages.csv
+summarize
+summarize wage exper, detail
+```
+
+```{stata}
+import delimited uswages.csv
+
+twoway (scatter wage exper), legend(off) note("Fig 1. Relationship between experience and wage") title("Wage vs Exper") name(Scatter)
+
+```
+
+
+![](stata_graph1.png)
+
+```{stata}
+import delimited uswages.csv
+
+drop if wage > 4000
+
+twoway (scatter wage exper), legend(off) note("Fig 2. Relationship between experience and wage (remove outlier)") title("Wage vs Exper") name(Scatter2)
+
+```
+
+![](stata_graph2.png)
+
+## 4. Simple Linear Regression
+
+First we will do OLS Regression. The linear fit follows a general trend which we might expect, that an increase in experience results in an increase in wage.
+
+```{stata, message = FALSE}
+import delimited uswages.csv
+ssc install bspline
+
+bspline, xvar(exper) gen(linear_wage_exper) power(1)
+regress wage linear_wage_exper*
+predict linear_wage_exper
+twoway (scatter wage exper)(line linear_wage_exper exper, sort), legend(off) note('Fig 3. Relationship between experience and wage: using simple linear regression') title("Linear") name(Linear)
+
+```
+
+![](stata_graph3.png)
+
+## 5. Polynomial Regression
+
+Next we perform polynomial regression and fit a quadratic. 
+```{stata}
+import delimited uswages.csv
+
+bspline, xvar(exper) gen(quad_wage_exper) power(2)
+regress wage quad_wage_exper*
+predict quad_wage_exper
+twoway (scatter wage exper)(line quad_wage_exper exper, sort), legend(off) note("Fig 4. Relationship between experience and wage: using polynomial regression") title("Quadratic") name(Quadratic)
+
+```
+
+![](stata_graph4.png)
+
+## 6. Cubic Regression
+
+Then we do a cubic regression spline. 
+```{stata}
+import delimited uswages.csv
+
+bspline, xvar(exper) knots(0,20,40,58) gen(cubic_wage_exper) power(3)
+regress wage cubic_wage_exper*
+predict cubic_wage_exper
+twoway (scatter wage exper)(line cubic_wage_exper exper, sort), legend(off) note("Fig 5. Relationship between experience and wage: using cubic regression. Knots at (0,20,40,58)") title("Cubic") name(Cubic)
+
+```
+
+![](stata_graph5.png)
+
+## 7. Summary
+
+We notice from Figure 6 that the polynomial curve and cubic spline curve overlap somewhat and look similar except where exper is around 60 or so. We might expect the cubic fit to be more accurate because of the local influence property from the knots.
+
+```{stata, message = FALSE, echo = FALSE, warning = FALSE, include = FALSE}
+import delimited uswages.csv
+
+twoway (scatter wage exper)(line linear_wage_exper quad_wage_exper cubic_wage_exper exper, sort), legend(label(1 "Observed") label(2 "Linear Regression") label(3 "Polynomial Regression") label(4 "Cubic Regrssion")) note("Fig 6. Relationship between experience and wage") title("Linear vs Quadratic vs Cubic") name(All)
+
+```
+
+![](stata_graph6.png)
