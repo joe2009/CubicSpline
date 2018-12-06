@@ -1,0 +1,169 @@
+---
+title: "Cubic Regression Spline"
+author: "Ming-Ni Ho, Xiaotong Yang, Joseph Laslie (Group 9)"
+date: "11/19/2018"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(reticulate)
+library(splines)
+library(faraway)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(reticulate)
+use_python("/Users/xiaotongyang/anaconda3/bin/python")
+```
+
+## Introduction to Cubic Spline Regression
+
+Cubic regression spline is a form of generalized linear models in regression analysis. Also known as B-spline, it is supported by a series of interior basis functions on the interval with chosen knots. Cubic regression splines are widely used on modeling nonlinear data and interaction between variables. Unlike traditional methods such as polynomial regression or broken stick regression, cubic regression spline takes both smoothness and local influence into consideration (Faraway, 2015). According to Julian J Faraway, the basis functions need to be a continuous cubic polynomial that is  nonzero on an interval defined by knots and zero anywhere else to ensure the local influence. Also, the first and second derivatives of the polynomials at each knotpoint should be continuous to achieve the overall smoothness.  (Faraway, 2015). More details of cubic regression spline can be found at [link](http://data.princeton.edu/eco572/smoothing2.html)
+
+We will provides three analysis examples produced by R with package splines, STATA with package mkspline and Python with package statsmodels, sklearn.metrics and patsy. In each example, we will first clean the data and remove outliers, fit the ols and polynomial regression models as alternative and finally fit the cubic regression spline models and compare their goodness-of-fit to the alternative models. 
+
+The result shows that cubic splines have the best fit compared to ols and polynomial regression, which benefits from its focus on local influence as stated before. In addition, the fitted model of cubic splines are smooth and will be significantly better than the other two methods applied to higher dimensional data. Limited by the scale of this tutorial, we only focus on the local influence advantage of cubic splines.
+
+## Data Summary
+
+In this project, we'll be using dataset uswages from R package faraway. The dataset can be found at [link](https://github.com/xiaotoYang/CubicSpline/blob/master/uswages.csv). Uswages congtains the weekly wages data for US male works collected from the Current Population Survey in 1988. It has 2000 observations and 10 variables. The detailed description of variables are as follows:
+
+```{r data, include = FALSE}
+data(uswages)
+type = as.character(sapply(uswages, typeof))
+explain = c("Real weekly wages in dollars",
+            "Years of education",
+            "Years of experience",
+            "1 if Black, 0 if White (other races not in sample)",
+            "1 if living in Standard Metropolitan Statistical Area, 0 if not",
+            "1 if living in the North East",
+            "1 if living in the Midwest",
+            "1 if living in the West",
+            "1 if living in the South",
+            "1 if working part time, 0 if not"
+            )
+var_explain = as.data.frame(cbind("Variables" = names(uswages), "Type" = type, "Explanation" = explain))
+```
+
+```{r data_table}
+kable(var_explain, caption = "Variable description")
+```
+
+In this tutorial, we will focus on the relationship between response variable wage and prediction variable experience. The two-dimensional relationship is easier to present and allows us to better illustrate cubic regression spline method.
+
+
+
+## Applying Cubic Regression Spline with R
+
+#### Data Cleaning
+
+Regression spline methods are easy to apply with R packages splines. To load data and draw plots, package faraway and ggplot2 are also needed.
+```{r load}
+# Load packages and data
+library(splines)
+library(faraway)
+library(ggplot2)
+library(dplyr)
+data(uswages)
+ggplot(uswages, aes(exper, wage))+geom_point(col = "slategrey")+
+  labs(x = "Experience in year", y = "Weekly wage")+
+  ggtitle("Relationship between weekly wages and years of experience")
+```
+
+From the plot, we can observe that there are a few outliers with extremely high wage. To avoid the influence of outliers on regression models, we remove observations with wage larger than 4000.
+
+```{r clean}
+# Remove outliers
+uswages = filter(uswages, wage<4000)
+```
+
+#### Benchmark
+First, let's try to capture the relationship with ordinary least square model (ols). 
+
+```{r ols}
+# Fit an ols model as benchmark
+fit1 = lm(wage~exper, data = uswages)
+plot(uswages$exper, uswages$wage, xlab = "Weekly wage", 
+     ylab = "Experience", main = "OLS model", col = "slategrey")
+abline(fit1, col = "red")
+```
+
+From the plot, we can see that OLS model fails to catch most of the variabnce in the data. 
+
+#### Alternative models: Polynomial regression
+
+Polynomial regression is a good alternative in this case. The linear models with polynomial of degree 2 and degree 4 are shown as follows:
+
+```{r poly}
+# Fit polynomial regression models with degree 2 and 4
+g2 = lm(wage~poly(exper, 2), data = uswages)
+g4 = lm(wage~poly(exper, 4), data = uswages)
+uswages = mutate(uswages, degree2 = fitted(g2), degree4 = fitted(g4))
+ggplot(uswages, aes(exper, wage)) +
+  labs(x = "Experience in year", y = "Weekly wage")+
+  geom_point( col = "slategrey") + 
+  geom_line(aes(exper, degree2,color = "2"))+
+  geom_line(aes(exper, degree4,color = "4")) +
+  scale_color_manual(values = c(
+    '2' = 'darkblue',
+    '4' = 'red')) +
+  labs(color = 'Polynomial degree')+
+  ggtitle("Polynomial regression models")
+```
+
+#### Cubic Regression Splines
+
+Polynomial regression models are smooth but the shortcomings are overfitting problem and each data point affect the fit globally. Cubic regression spline, however, by seperate data into subsets, greatly mitigate the problem. We first used the 25%, 50% and 75% quantiles as the set of knots. The result after cubic spline regression is as follows:
+
+```{r spline}
+# Fit regression spline model with chosen knots
+# 8, 15 and 27 are the quantiles for wage
+cubic_spline = lm(wage~bs(exper, knots = c(8,15,27)), data = uswages)
+uswages = mutate(uswages, smooth = fitted(cubic_spline))
+ggplot(uswages, aes(exper, wage)) + 
+  labs(x = "Experience in year", y = "Weekly wage")+
+  geom_point(col = "slategrey") +
+  geom_line(aes(exper, smooth), col = "red") + 
+  ggtitle("Cubic regression spline model")
+
+```
+
+Alternatively, we can even split the range of predictor variable experience into 4 subsets and use the breakpoints as the knots. In this way, we get 15, 30 and 45. 
+
+```{r spline2}
+# Fit regression spline model with chosen knots
+# 8, 15 and 27 are the quantiles for wage
+cubic_spline2 = lm(wage~bs(exper, knots = c(15, 30, 45)), data = uswages)
+uswages = mutate(uswages, smooth2 = fitted(cubic_spline2))
+ggplot(uswages, aes(exper, wage)) + 
+  labs(x = "Experience in year", y = "Weekly wage")+
+  geom_point(col = "slategrey") +
+  geom_line(aes(exper, smooth2), col = "red") + 
+  ggtitle("Cubic regression spline model")
+
+```
+
+#### Summary
+
+To better compare the goodness of fit of each model, we attached a MSE table below. 
+
+```{r summary}
+mse = function(model){return(mean(model$residual^2))}
+mse_ols = mse(fit1)
+mse_poly1 = mse(g2)
+mse_poly2 = mse(g4)
+mse_cubic = mse(cubic_spline)
+mse_cubic2 = mse(cubic_spline2)
+
+model_name = c("OLS", "Polynomial with degree 2", "Polynomial with degree 4", "Cubic Spline 1", "Cubic Spline 2")
+mses = c(mse_ols, mse_poly1, mse_poly2, mse_cubic, mse_cubic2)
+mse_table = cbind(model_name, mses)
+colnames(mse_table) = c("Models", "Mean Squared Errors")
+kable(mse_table, caption = "Mean squared errors for different models", digits = 3)
+```
+
+In this table, we can find that the cubic spline regression with knots (8, 15, 27) has the best fit. In general, cubic splines are better than polynomial regressions, which are better than ols. 
