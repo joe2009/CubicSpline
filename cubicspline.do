@@ -50,11 +50,11 @@ predict cubic_wage_exper
 //compare regression results using bspline package with those obtained from scrach
 sum cubic_wage_exper cubic_wage_exper_spline
 
-//Cubic Spline regression using bspline with knots now evenly spaced at 15,30,40 
-bspline, xvar(exper) knots(15,30,40) gen(cubic_wage_exper_spline_even) power(3)
+//Cubic Spline regression using bspline with knots now evenly spaced at 15,30,45 
+bspline, xvar(exper) knots(15,30,45) gen(cubic_wage_exper_spline_even) power(3)
 regress wage cubic_wage_exper_spline_even*
 predict cubic_wage_exper_spline_even
-twoway (scatter wage exper)(line cubic_wage_exper_spline_even exper, sort), ytitle(Wage) xtitle(Experience) legend(off) note("Fig 7. Relationship between experience and wage: using cubic regression. Knots at (15,30,40)") title("Cubic: Evenly Spaced Knots") name(Cubic2)
+twoway (scatter wage exper)(line cubic_wage_exper_spline_even exper, sort), ytitle(Wage) xtitle(Experience) legend(off) note("Fig 7. Relationship between experience and wage: using cubic regression. Knots at (15,30,45)") title("Cubic: Evenly Spaced Knots") name(Cubic2)
 
 //Create a plot of all the fits: linear, polynomial, cubic
-twoway (scatter wage exper)(line linear_wage_exper quad_wage_exper cubic_wage_exper_spline exper, sort), ytitle(Wage) xtitle(Experience) legend(label(1 "Observed") label(2 "Linear Regression") label(3 "Polynomial Regression") label(4 "Cubic Regrssion")) note("Fig 8. Relationship between experience and wage") title("Linear vs Quadratic vs Cubic") name(All)
+twoway (scatter wage exper)(line linear_wage_exper quad_wage_exper degfour_wage_exper cubic_wage_exper_spline cubic_wage_exper_spline_even exper, sort), ytitle(Wage) xtitle(Experience) legend(label(1 "Observed") label(2 "Linear Regression") label(3 "Polynomial Deg. 2") label(4 "Polynomial Deg. 4") label(5 "Cubic: Quartiles") label(6 "Cubic: 15,30,45")) note("Fig 8. Relationship between experience and wage") title("Linear vs Polynomial vs Cubic") name(All)
